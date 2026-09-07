@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AgriCréditPlus — Entretiens terrain</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=Space+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F6F7F5;
+    --surface:#FFFFFF;
+    --surface-2:#FBFBFA;
+    --border:#DEE1DA;
+    --text:#22262A;
+    --text-soft:#6B716A;
+    --text-faint:#9A9F97;
+    --accent:#3B6E63;
+    --accent-soft:#E6EEEB;
+    --accent-text:#2A5049;
+    --danger:#B5482D;
+    --danger-soft:#F7EAE5;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    font-weight:400;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'Space Mono',monospace;}
+  h1,h2,h3{margin:0; font-weight:500;}
+  a:focus-visible,button:focus-visible,.chip:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{
+    outline:2px solid var(--accent); outline-offset:2px;
+  }
+
+  /* ---------- LANDING ---------- */
+  .landing{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;}
+  .landing-inner{max-width:640px; width:100%;}
+  .landing-inner h1{font-size:1.5rem;}
+  .landing-inner .sub{color:var(--text-soft); margin:6px 0 28px; font-size:.95rem;}
+  .guide-cards{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .guide-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:10px;
+    padding:20px 16px; text-align:left; cursor:pointer; font-family:inherit;
+  }
+  .guide-card:hover{border-color:var(--accent);}
+  .guide-card .name{font-size:1rem; font-weight:500;}
+  .guide-card .count{display:block; margin-top:6px; font-size:.8rem; color:var(--text-soft);}
+  @media (max-width:480px){ .guide-cards{grid-template-columns:1fr;} }
+
+  /* ---------- APP HEADER ---------- */
+  #app{display:none;}
+  header.top{
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+  header.top h1{font-size:1.05rem;}
+  header.top .sub{font-size:.78rem; color:var(--text-soft); margin-top:2px;}
+  .tabs{display:flex; gap:4px; background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:3px;}
+  .tab-btn{
+    border:none; background:none; padding:7px 12px; font-size:.85rem; color:var(--text-soft);
+    border-radius:6px; cursor:pointer; font-family:inherit;
+  }
+  .tab-btn.active{background:var(--surface); color:var(--accent-text); border:1px solid var(--border);}
+  .btn{
+    border:1px solid var(--border); background:var(--surface); color:var(--text);
+    padding:8px 13px; border-radius:8px; font-size:.85rem; cursor:pointer; font-family:inherit;
+  }
+  .btn:hover{border-color:var(--accent);}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#fff;}
+  .btn.danger{color:var(--danger); border-color:var(--danger-soft);}
+  .btn.small{padding:5px 9px; font-size:.78rem;}
+
+  main{max-width:960px; margin:0 auto; padding:20px 16px 80px;}
+
+  /* ---------- FORM ---------- */
+  .section{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 16px 18px; margin-bottom:14px;}
+  .section h2{font-size:.98rem; margin-bottom:14px; color:var(--accent-text);}
+  .field{margin-bottom:14px;}
+  .field label{display:block; font-size:.78rem; color:var(--text-soft); margin-bottom:6px;}
+  input[type=text],input[type=number],input[type=date],textarea,select{
+    width:100%; font-family:inherit; font-size:.92rem; padding:9px 11px;
+    border:1px solid var(--border); border-radius:8px; background:#fff; color:var(--text);
+  }
+  textarea{min-height:60px; resize:vertical;}
+  .chip-group{display:flex; flex-wrap:wrap; gap:7px;}
+  .chip{
+    border:1px solid var(--border); background:#fff; color:var(--text);
+    padding:8px 12px; border-radius:8px; font-size:.88rem; cursor:pointer; user-select:none;
+  }
+  .chip.selected{background:var(--accent-soft); border-color:var(--accent); color:var(--accent-text); font-weight:500;}
+  .other-input{margin-top:8px; display:none;}
+  .other-input.show{display:block;}
+
+  .action-bar{
+    position:fixed; left:0; right:0; bottom:0; background:var(--surface); border-top:1px solid var(--border);
+    padding:10px 16px calc(10px + env(safe-area-inset-bottom)); display:flex; gap:8px; z-index:30;
+  }
+  .action-bar .btn{flex:1;}
+  .action-bar .btn.primary{flex:1.4;}
+
+  #toast{
+    position:fixed; top:14px; left:50%; transform:translateX(-50%) translateY(-140%);
+    background:var(--text); color:#fff; padding:9px 16px; border-radius:999px; font-size:.85rem; z-index:60;
+    transition:transform .2s ease;
+  }
+  #toast.show{transform:translateX(-50%) translateY(0);}
+
+  /* ---------- TABLE ---------- */
+  .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
+  table{border-collapse:collapse; width:100%; font-size:.82rem;}
+  th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis;}
+  th{background:var(--surface-2); color:var(--text-soft); font-weight:500; position:sticky; top:0;}
+  td:first-child, th:first-child{position:sticky; left:0; background:var(--surface); z-index:1;}
+  th:first-child{background:var(--surface-2); z-index:2;}
+  tr:hover td{background:var(--accent-soft);}
+  tr:hover td:first-child{background:var(--accent-soft);}
+  .empty-note{color:var(--text-soft); font-size:.88rem; text-align:center; padding:40px 10px;}
+  .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;}
+
+  /* ---------- EDITOR ---------- */
+  .editor-section{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 14px 16px; margin-bottom:14px;}
+  .editor-section .sec-head{display:flex; gap:8px; align-items:center; margin-bottom:12px;}
+  .editor-section .sec-head input{font-size:.95rem; font-weight:500;}
+  .editor-question{border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; background:var(--surface-2);}
+  .editor-question .row{display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;}
+  .editor-question .row input[type=text]{flex:1; min-width:180px;}
+  .editor-question select{width:auto; min-width:140px;}
+  .editor-question textarea.opts{display:none;}
+  .editor-question textarea.opts.show{display:block; margin-bottom:8px;}
+  .editor-question label.other-toggle{display:none; align-items:center; gap:6px; font-size:.8rem; color:var(--text-soft); margin-bottom:8px;}
+  .editor-question label.other-toggle.show{display:flex;}
+  .q-actions{display:flex; gap:6px; justify-content:flex-end;}
+  .editor-footer{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<div class="landing" id="landing">
+  <div class="landing-inner">
+    <h1>AgriCréditPlus</h1>
+    <p class="sub">Choisissez le guide d'entretien à utiliser.</p>
+    <div class="guide-cards">
+      <button class="guide-card" data-guide="agriculteurs" type="button">
+        <span class="name">Agriculteurs</span>
+        <span class="count" id="countAgri"></span>
+      </button>
+      <button class="guide-card" data-guide="institutions" type="button">
+        <span class="name">Institutions financières</span>
+        <span class="count" id="countInst"></span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <header class="top">
+    <div>
+      <h1 id="guideTitle">—</h1>
+      <div class="sub" id="guideSub"></div>
+    </div>
+    <div class="tabs">
+      <button class="tab-btn" data-tab="form" type="button">Nouvelle fiche</button>
+      <button class="tab-btn" data-tab="table" type="button">Toutes les fiches</button>
+      <button class="tab-btn" data-tab="editor" type="button">Modifier les questions</button>
+    </div>
+    <button class="btn small" id="backToLanding" type="button">Changer de guide</button>
+  </header>
+
+  <main>
+    <div id="tab-form"></div>
+    <div id="tab-table" style="display:none;"></div>
+    <div id="tab-editor" style="display:none;"></div>
+  </main>
+
+  <div class="action-bar" id="formActionBar">
+    <button class="btn" id="resetBtn" type="button">Nouvelle fiche vierge</button>
+    <button class="btn primary" id="saveBtn" type="button">Enregistrer la fiche</button>
+  </div>
+</div>
+
+<script>
+(function(){
+
+function q(id,label,type,options,hasOther){ return {id:id,label:label,type:type,options:options||[],hasOther:!!hasOther}; }
+function sec(id,title,questions){ return {id:id,title:title,questions:questions}; }
+
+const DEFAULT_SCHEMAS = {
+  agriculteurs:{ title:"Agriculteurs", sections:[
+    sec('sa1','Informations générales',[
+      q('a1','Nom de l\'enquêteur','text'),
+      q('a2','Date de l\'entretien','date'),
+      q('a3','Localité / village / quartier','text'),
+      q('a4','Région / préfecture de l\'exploitation','text'),
+      q('a5','Canal d\'entretien','single',['Présentiel (sur l\'exploitation)','Appel téléphonique','Échange WhatsApp','Visioconférence']),
+      q('a6','Consentement obtenu','single',['Oui','Non'])
+    ]),
+    sec('sa2','Profil de l\'exploitant',[
+      q('a7','Nom et prénoms de l\'exploitant','text'),
+      q('a8','Numéro de téléphone de contact','text'),
+      q('a9','Type de téléphone possédé','single',['Aucun téléphone','Téléphone basique (touche-touche)','Smartphone']),
+      q('a10','Cultures principales pratiquées','multi',['Maïs','Riz','Soja','Coton'],true),
+      q('a11','Superficie approximative (hectares)','number'),
+      q('a12','Nombre d\'années d\'activité agricole','number'),
+      q('a13','Membre d\'une coopérative ou groupement','single',['Non','Oui']),
+      q('a14','Nom de la coopérative (si membre)','text'),
+      q('a15','Niveau d\'étude / alphabétisation','single',['Sait lire et écrire','Ne sait pas lire et écrire','Partiellement'])
+    ]),
+    sec('sa3','Expérience de campagne & financement actuel',[
+      q('a16','Résumé libre de la dernière campagne','textarea'),
+      q('a17','La dernière campagne a-t-elle été productive et rentable','single',['Oui','Non','Partiellement']),
+      q('a18','Pourquoi (campagne)','text'),
+      q('a19','Arrivez-vous à satisfaire la demande de votre clientèle','single',['Oui','Non','Partiellement']),
+      q('a20','Arrivez-vous à financer votre activité actuellement','single',['Oui','Non','Partiellement'])
+    ]),
+    sec('sa4','Accès au crédit et barrières',[
+      q('a21','Avez-vous déjà tenté un crédit agricole formel','single',['Non','Oui']),
+      q('a22','Comment financez-vous vos activités','multi',['Épargne personnelle','Tontine / entraide communautaire','Famille / proches','Prêteur informel','Vente anticipée de la récolte'],true),
+      q('a23','Auprès de qui avez-vous fait la demande de crédit','multi',['Banque commerciale','Institution de microfinance (IMF)','Coopérative / groupement'],true),
+      q('a24','Cette demande a-t-elle abouti','single',['Oui','Non','Partiellement']),
+      q('a25','Si accordé, remboursé dans les délais','single',['Oui','Non','Partiellement']),
+      q('a26','Principaux obstacles rencontrés pour obtenir un crédit','multi',['Manque de garantie physique','Dossier administratif trop lourd','Absence d\'historique bancaire','Taux d\'intérêt trop élevé','Illettrisme','Peur de ne pas pouvoir rembourser','Procédures trop longues'],true),
+      q('a27','Déjà pris un crédit personnel non déclaré pour le champ','single',['Non','Oui']),
+      q('a28','Pourquoi (crédit personnel)','text'),
+      q('a29','Montant habituel emprunté (FCFA)','number'),
+      q('a30','Priorité de financement','multi',['Achat d\'intrants','Matériel agricole / outils','Main-d\'œuvre','Transformation / transport']),
+      q('a31','Préférence de financement','single',['En nature','En espèces','Les deux']),
+      q('a32','Rythme de sollicitation d\'un prêt','single',['Une fois par saison','Une fois par an','Ponctuellement'],true),
+      q('a33','Taux d\'intérêt jugés trop élevés','single',['Non','Oui']),
+      q('a34','Taux annuel/saison accepté (%)','number'),
+      q('a35','Déjà souscrit une assurance agricole','single',['Oui','Non']),
+      q('a36','Pourquoi pas d\'assurance','text'),
+      q('a37','Montant prêt à investir en assurance (FCFA)','number')
+    ]),
+    sec('sa5','Autonomie numérique & score AgriCréditPlus',[
+      q('a38','Utilise le Mobile Money (T-Money / Flooz)','single',['Non','Oui']),
+      q('a39','Fréquence d\'utilisation du Mobile Money','single',['Rarement','Plusieurs fois par mois','Tous les jours']),
+      q('a40','Qualité du réseau internet dans le village','single',['Inexistant','Faible','Moyen','Bon']),
+      q('a41','Sauriez-vous remplir seul un formulaire smartphone / USSD','single',['Oui, tout seul','Non, préfère être accompagné']),
+      q('a42','Accepteriez-vous de partager vos données de production','single',['Non','Oui, sans conditions','Oui, sous conditions']),
+      q('a43','Sous quelles conditions (partage de données)','text'),
+      q('a44','Un système basé sur les données réelles vous semble-t-il juste','single',['Non','Oui']),
+      q('a45','Commentaire (système basé sur données)','text'),
+      q('a46','Coopérative comme intermédiaire de certification','single',['Non','Oui','Non concerné'])
+    ]),
+    sec('sa6','Difficultés, programmes & attentes',[
+      q('a47','Documents officiels possédés','multi',['Pièce d\'identité valide','Titre foncier / attestation','Historique de compte bancaire','Aucun de ces documents']),
+      q('a48','Connaissance des critères exacts des banques','single',['Pas du tout','Un peu','Oui, très bien']),
+      q('a49','Connaît des programmes de soutien agricole (MIFA, FAIEJ, FSRP)','single',['Non','Oui']),
+      q('a50','Y a-t-il déjà eu recours','single',['Oui','Non']),
+      q('a51','Besoin prioritaire pour renforcer l\'activité','single',['Financement / crédit','Matériel agricole','Intrants de qualité','Formation / accompagnement'],true),
+      q('a52','Canal préféré pour accéder au service','single',['Application mobile','Centre d\'appels','Site internet','Agent de terrain physique']),
+      q('a53','Impact d\'un accès plus facile au crédit','textarea'),
+      q('a54','Commentaire libre','textarea')
+    ]),
+    sec('sa7','Note de l\'enquêteur',[
+      q('a55','Degré de réceptivité','single',['Très méfiant','Neutre','Très enthousiaste']),
+      q('a56','Qualité de la communication','single',['Difficile','Fluide']),
+      q('a57','Observations environnementales','textarea')
+    ])
+  ]},
+  institutions:{ title:"Institutions financières", sections:[
+    sec('si1','Identification de la structure',[
+      q('i1','Nom de l\'institution financière','text'),
+      q('i2','Type d\'institution','single',['Banque commerciale','Institution de microfinance (IMF)','Compagnie d\'assurance'],true),
+      q('i3','Nom et fonction de la personne interrogée','text'),
+      q('i4','Contact (téléphone et e-mail)','text'),
+      q('i5','Adresse physique / agence','text'),
+      q('i6','Canal d\'entretien','single',['Présentiel','Appel téléphonique','Visioconférence','Échange écrit / WhatsApp Pro'])
+    ]),
+    sec('si2','Financement des producteurs agricoles',[
+      q('i7','Financez-vous actuellement les producteurs agricoles','single',['Non','Oui']),
+      q('i8','Si non, raison dominante','single',['Risque perçu trop élevé','Manque de garanties réelles','Absence d\'historique bancaire'],true),
+      q('i9','Conditions et documents clés exigés','multi',['Pièce d\'identité officielle','Titre foncier / attestation','Historique de compte bancaire','Garant physique','Caution solidaire'],true),
+      q('i10','Prêts à accepter des alternatives aux documents classiques','single',['Non','Oui, sans problème','Oui, sous conditions']),
+      q('i11','Si sous conditions, lesquelles','text'),
+      q('i12','Alternatives considérées en l\'absence d\'historique bancaire','textarea'),
+      q('i13','Types de garanties acceptées','multi',['Garant physique de confiance','Caution solidaire de groupe','Nantissement sur récoltes futures','Aucun'],true),
+      q('i14','Profil de client agricole privilégié','single',['Producteurs individuels uniquement','Coopératives et groupements uniquement','Les deux']),
+      q('i15','Pourcentage du prêt vs valeur du projet (%)','number'),
+      q('i16','Montant minimum de prêt agricole accordé (FCFA)','number')
+    ]),
+    sec('si3','Connaissance du secteur agricole',[
+      q('i17','Équipe familière avec les itinéraires techniques agricoles','single',['Pas du tout','Un peu','Oui, très bien']),
+      q('i18','En tenez-vous compte lors de l\'octroi / suivi des prêts','single',['Non','Oui']),
+      q('i19','De quelle manière','text'),
+      q('i20','Période de différé / échéances adaptées aux récoltes','single',['Non, remboursement mensuel rigide','Oui, échéances flexibles']),
+      q('i21','Prêts à formaliser un échéancier calé sur le calendrier agricole','single',['Non','Oui','À étudier au cas par cas'])
+    ]),
+    sec('si4','Perception des risques et relation clients',[
+      q('i22','Avis général sur les prêts accordés aux agriculteurs','single',['Non, trop risqués','Oui, bon segment','Avis mitigé']),
+      q('i23','Les agriculteurs remboursent-ils généralement','single',['Non','Oui','Partiellement / retards fréquents']),
+      q('i24','Causes principales des impayés','multi',['Aléas climatiques','Mauvaise récolte','Prix de vente trop bas','Mauvaise gestion financière'],true),
+      q('i25','Un meilleur suivi des données permettrait-il de mieux prédire le remboursement','single',['Non','Oui','À étudier'])
+    ]),
+    sec('si5','Attractivité et assurance agricole',[
+      q('i26','Le crédit agricole est-il un segment stratégique pour vous','single',['Non','Oui','Peu / secondaire']),
+      q('i27','Pourquoi','text'),
+      q('i28','Taux d\'intérêt annuel minimum applicable (%)','number'),
+      q('i29','Proposez-vous une assurance agricole','single',['Non','Oui']),
+      q('i30','Si oui, quel partenaire','text'),
+      q('i31','Cette assurance est-elle obligatoire ou optionnelle','single',['Non proposée','Optionnelle','Obligatoire']),
+      q('i32','Coût ou condition d\'accès de l\'assurance','textarea')
+    ]),
+    sec('si6','Intégration du score numérique AgriCréditPlus',[
+      q('i33','Connaissez-vous déjà d\'autres solutions de scoring digital','single',['Non','Oui']),
+      q('i34','Lesquelles','text'),
+      q('i35','Prêts à utiliser un score tiers AgriCréditPlus comme critère d\'octroi','single',['Non','Oui, sans problème','Oui, sous certaines conditions']),
+      q('i36','Si conditions, lesquelles','text'),
+      q('i37','Données donnant le plus de valeur au score','multi',['Historique de rendement (tonnes/ha)','Superficie vérifiée (GPS)','Flux Mobile Money','Statut d\'adhésion coopérative','Comportement de remboursement antérieur'],true),
+      q('i38','Ouverts à intégrer les données Mobile Money dans l\'analyse du risque','single',['Non','Oui','À étudier']),
+      q('i39','Format de livraison du score préféré','single',['API automatisée intégrée','Tableau de bord web sécurisé','Rapport PDF par e-mail'],true),
+      q('i40','Contraintes réglementaires limitant l\'usage d\'un score tiers','single',['Non','Oui']),
+      q('i41','Lesquelles en priorité','textarea'),
+      q('i42','Modèle de facturation acceptable','single',['Commission sur le volume de crédit accordé','Frais fixe mensuel ou annuel','Gratuit (financé par subventions)'],true)
+    ]),
+    sec('si7','Programmes étatiques & projet pilote',[
+      q('i43','Travaillez-vous déjà avec des programmes étatiques (MIFA, FAIEJ, FSRP)','single',['Non','Oui']),
+      q('i44','Commentaire sur l\'efficacité','textarea'),
+      q('i45','Intéressés à participer à un projet pilote','single',['Non','Oui, très intéressé','Oui, à discuter sous conditions']),
+      q('i46','Autres remarques','textarea')
+    ]),
+    sec('si8','Note de l\'enquêteur',[
+      q('i47','Intérêt stratégique perçu','single',['Faible','Moyen','Élevé']),
+      q('i48','Prochaine étape convenue','single',['Envoyer une présentation PDF','Prendre RDV pour une démo','Relancer plus tard'],true),
+      q('i49','Commentaires de l\'enquêteur','textarea')
+    ])
+  ]}
+};
+
+let currentGuide = null;
+let schemas = {};
+let entriesByGuide = {agriculteurs:[], institutions:[]};
+
+function genId(prefix){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000); }
+function flatQuestions(schema){ return schema.sections.reduce((acc,s)=>acc.concat(s.questions),[]); }
+
+async function loadAll(){
+  for(const g of ['agriculteurs','institutions']){
+    try{
+      const r = await window.storage.get('agricredit_schema_'+g, true);
+      schemas[g] = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[g]));
+    }catch(e){ schemas[g] = JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[g])); }
+    try{
+      const r2 = await window.storage.get('agricredit_entries_'+g, true);
+      entriesByGuide[g] = r2 && r2.value ? JSON.parse(r2.value) : [];
+    }catch(e){ entriesByGuide[g] = []; }
+  }
+  document.getElementById('countAgri').textContent = entriesByGuide.agriculteurs.length + ' fiche(s) enregistrée(s)';
+  document.getElementById('countInst').textContent = entriesByGuide.institutions.length + ' fiche(s) enregistrée(s)';
+}
+async function saveSchema(guide){
+  try{ await window.storage.set('agricredit_schema_'+guide, JSON.stringify(schemas[guide]), true); }
+  catch(e){ showToast('Erreur de sauvegarde du schéma'); }
+}
+async function saveEntries(guide){
+  try{ await window.storage.set('agricredit_entries_'+guide, JSON.stringify(entriesByGuide[guide]), true); }
+  catch(e){ showToast('Erreur de sauvegarde de la fiche'); }
+}
+
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
+}
+
+/* ---------------- FORM RENDERING ---------------- */
+function fieldHTML(question){
+  const qid = question.id;
+  if(question.type==='text') return `<div class="field"><label>${esc(question.label)}</label><input type="text" id="f_${qid}"></div>`;
+  if(question.type==='number') return `<div class="field"><label>${esc(question.label)}</label><input type="number" id="f_${qid}"></div>`;
+  if(question.type==='date') return `<div class="field"><label>${esc(question.label)}</label><input type="date" id="f_${qid}"></div>`;
+  if(question.type==='textarea') return `<div class="field"><label>${esc(question.label)}</label><textarea id="f_${qid}"></textarea></div>`;
+  if(question.type==='single' || question.type==='multi'){
+    let chips = question.options.map(o=>`<div class="chip" tabindex="0" data-value="${esc(o)}">${esc(o)}</div>`).join('');
+    if(question.hasOther) chips += `<div class="chip" tabindex="0" data-value="Autre" data-other="true">Autre</div>`;
+    let otherBox = question.hasOther ? `<input type="text" id="f_${qid}__other" class="other-input" placeholder="Précisez...">` : '';
+    return `<div class="field"><label>${esc(question.label)}</label>
+      <div class="chip-group" id="f_${qid}" data-mode="${question.type}">${chips}</div>${otherBox}</div>`;
+  }
+  return '';
+}
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function renderForm(){
+  const schema = schemas[currentGuide];
+  let html = '';
+  schema.sections.forEach(s=>{
+    html += `<div class="section"><h2>${esc(s.title)}</h2>`;
+    s.questions.forEach(qn=>{ html += fieldHTML(qn); });
+    html += `</div>`;
+  });
+  document.getElementById('tab-form').innerHTML = html;
+  setupChipGroups(document.getElementById('tab-form'));
+}
+function setupChipGroups(container){
+  container.querySelectorAll('.chip-group').forEach(group=>{
+    const mode = group.dataset.mode;
+    const qid = group.id.replace('f_','');
+    const otherInput = document.getElementById('f_'+qid+'__other');
+    function updateOther(){
+      if(!otherInput) return;
+      const otherChip = group.querySelector('[data-other="true"]');
+      const on = otherChip && otherChip.classList.contains('selected');
+      otherInput.classList.toggle('show', !!on);
+      if(!on) otherInput.value='';
+    }
+    group.querySelectorAll('.chip').forEach(chip=>{
+      function toggle(){
+        if(mode==='single'){
+          group.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+          chip.classList.add('selected');
+        } else {
+          chip.classList.toggle('selected');
+        }
+        updateOther();
+      }
+      chip.addEventListener('click', toggle);
+      chip.addEventListener('keydown', e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+    });
+  });
+}
+function collectAnswers(){
+  const schema = schemas[currentGuide];
+  const answers = {};
+  flatQuestions(schema).forEach(qn=>{
+    const qid=qn.id;
+    if(qn.type==='single'||qn.type==='multi'){
+      const group = document.getElementById('f_'+qid);
+      let vals = Array.from(group.querySelectorAll('.chip.selected')).map(c=>c.dataset.value);
+      const otherInput = document.getElementById('f_'+qid+'__other');
+      if(otherInput && vals.includes('Autre')){
+        const txt = otherInput.value.trim();
+        vals = vals.map(v=> v==='Autre' ? ('Autre'+(txt?': '+txt:'')) : v);
+      }
+      answers[qid] = qn.type==='single' ? (vals[0]||'') : vals;
+    } else {
+      const el = document.getElementById('f_'+qid);
+      answers[qid] = el ? el.value.trim() : '';
+    }
+  });
+  return answers;
+}
+function clearForm(){
+  const schema = schemas[currentGuide];
+  flatQuestions(schema).forEach(qn=>{
+    if(qn.type==='single'||qn.type==='multi'){
+      const group = document.getElementById('f_'+qn.id);
+      group.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
+      const otherInput = document.getElementById('f_'+qn.id+'__other');
+      if(otherInput){ otherInput.classList.remove('show'); otherInput.value=''; }
+    } else {
+      const el = document.getElementById('f_'+qn.id);
+      if(el) el.value='';
+    }
+  });
+}
+
+/* ---------------- TABLE RENDERING ---------------- */
+function formatVal(v){
+  if(Array.isArray(v)) return v.length? v.join(' / ') : '—';
+  return (v===undefined||v===null||v==='') ? '—' : String(v);
+}
+function renderTable(){
+  const schema = schemas[currentGuide];
+  const qs = flatQuestions(schema);
+  const entries = entriesByGuide[currentGuide];
+  let html = `<div class="toolbar"><div>${entries.length} fiche(s)</div><button class="btn" id="exportCsvBtn" type="button">Exporter en CSV</button></div>`;
+  if(entries.length===0){
+    html += `<p class="empty-note">Aucune fiche enregistrée pour le moment.</p>`;
+  } else {
+    html += `<div class="table-wrap"><table><thead><tr><th>Horodatage</th>`;
+    qs.forEach(qn=> html += `<th title="${esc(qn.label)}">${esc(qn.label)}</th>`);
+    html += `<th></th></tr></thead><tbody>`;
+    entries.slice().reverse().forEach(f=>{
+      html += `<tr><td>${esc(new Date(f.createdAt).toLocaleString('fr-FR'))}</td>`;
+      qs.forEach(qn=>{
+        const v = f.answers ? f.answers[qn.id] : undefined;
+        const disp = formatVal(v);
+        html += `<td title="${esc(Array.isArray(v)?v.join(', '):(v||''))}">${esc(disp)}</td>`;
+      });
+      html += `<td><button class="btn small danger del-entry" data-id="${f.id}" type="button">Supprimer</button></td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  }
+  document.getElementById('tab-table').innerHTML = html;
+  const exportBtn = document.getElementById('exportCsvBtn');
+  if(exportBtn) exportBtn.addEventListener('click', exportCSV);
+  document.querySelectorAll('.del-entry').forEach(btn=>{
+    btn.addEventListener('click', async ()=>{
+      if(confirm('Supprimer cette fiche ?')){
+        entriesByGuide[currentGuide] = entriesByGuide[currentGuide].filter(f=>f.id!==btn.dataset.id);
+        await saveEntries(currentGuide);
+        renderTable();
+        showToast('Fiche supprimée');
+      }
+    });
+  });
+}
+function csvEscape(v){
+  v = (v===undefined||v===null) ? '' : String(v);
+  if(/[",\n;]/.test(v)) v = '"'+v.replace(/"/g,'""')+'"';
+  return v;
+}
+function exportCSV(){
+  const schema = schemas[currentGuide];
+  const qs = flatQuestions(schema);
+  const entries = entriesByGuide[currentGuide];
+  if(entries.length===0){ showToast('Aucune fiche à exporter'); return; }
+  const header = ['Horodatage'].concat(qs.map(q=>q.label)).map(csvEscape).join(',');
+  const rows = entries.map(f=>{
+    const cells = [new Date(f.createdAt).toISOString()];
+    qs.forEach(qn=>{
+      const v = f.answers ? f.answers[qn.id] : '';
+      cells.push(Array.isArray(v)? v.join(' | ') : (v||''));
+    });
+    return cells.map(csvEscape).join(',');
+  });
+  const csv = '\uFEFF'+[header,...rows].join('\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download = 'agricredit-'+currentGuide+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  showToast(entries.length+' fiche(s) exportée(s)');
+}
+
+/* ---------------- EDITOR RENDERING ---------------- */
+function renderEditor(){
+  const schema = schemas[currentGuide];
+  let html = `<div id="editorContainer">`;
+  schema.sections.forEach(s=>{ html += editorSectionHTML(s); });
+  html += `</div>
+    <div class="editor-footer">
+      <button class="btn" id="addSectionBtn" type="button">+ Ajouter une section</button>
+      <button class="btn primary" id="saveSchemaBtn" type="button">Enregistrer les modifications</button>
+      <button class="btn danger" id="resetSchemaBtn" type="button">Réinitialiser aux valeurs par défaut</button>
+    </div>`;
+  document.getElementById('tab-editor').innerHTML = html;
+  bindEditorEvents();
+}
+function editorSectionHTML(s){
+  let qhtml = s.questions.map(qn=>editorQuestionHTML(qn)).join('');
+  return `<div class="editor-section" data-section-id="${s.id}">
+    <div class="sec-head">
+      <input type="text" class="section-title-input" value="${esc(s.title)}">
+      <button class="btn small danger del-section" type="button">Supprimer la section</button>
+    </div>
+    <div class="editor-questions">${qhtml}</div>
+    <button class="btn small add-question" type="button">+ Ajouter une question</button>
+  </div>`;
+}
+function editorQuestionHTML(qn){
+  const isChoice = qn.type==='single'||qn.type==='multi';
+  return `<div class="editor-question" data-qid="${qn.id}">
+    <div class="row">
+      <input type="text" class="q-label" value="${esc(qn.label)}" placeholder="Intitulé de la question">
+      <select class="q-type">
+        <option value="text" ${qn.type==='text'?'selected':''}>Texte court</option>
+        <option value="textarea" ${qn.type==='textarea'?'selected':''}>Texte long</option>
+        <option value="number" ${qn.type==='number'?'selected':''}>Nombre</option>
+        <option value="date" ${qn.type==='date'?'selected':''}>Date</option>
+        <option value="single" ${qn.type==='single'?'selected':''}>Choix unique</option>
+        <option value="multi" ${qn.type==='multi'?'selected':''}>Choix multiple</option>
+      </select>
+    </div>
+    <textarea class="opts ${isChoice?'show':''}" placeholder="Une option par ligne">${esc(qn.options.join('\n'))}</textarea>
+    <label class="other-toggle ${isChoice?'show':''}"><input type="checkbox" class="q-other" ${qn.hasOther?'checked':''}> Ajouter une option "Autre" avec champ libre</label>
+    <div class="q-actions">
+      <button class="btn small q-up" type="button">Monter</button>
+      <button class="btn small q-down" type="button">Descendre</button>
+      <button class="btn small danger q-del" type="button">Supprimer</button>
+    </div>
+  </div>`;
+}
+function bindEditorEvents(){
+  const root = document.getElementById('tab-editor');
+
+  root.querySelectorAll('.q-type').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const qDiv = sel.closest('.editor-question');
+      const isChoice = sel.value==='single'||sel.value==='multi';
+      qDiv.querySelector('.opts').classList.toggle('show', isChoice);
+      qDiv.querySelector('.other-toggle').classList.toggle('show', isChoice);
+    });
+  });
+  root.querySelectorAll('.q-up').forEach(btn=> btn.addEventListener('click', ()=>{
+    const qDiv = btn.closest('.editor-question');
+    const prev = qDiv.previousElementSibling;
+    if(prev) qDiv.parentNode.insertBefore(qDiv, prev);
+  }));
+  root.querySelectorAll('.q-down').forEach(btn=> btn.addEventListener('click', ()=>{
+    const qDiv = btn.closest('.editor-question');
+    const next = qDiv.nextElementSibling;
+    if(next) qDiv.parentNode.insertBefore(next, qDiv);
+  }));
+  root.querySelectorAll('.q-del').forEach(btn=> btn.addEventListener('click', ()=>{
+    if(confirm('Supprimer cette question ?')) btn.closest('.editor-question').remove();
+  }));
+  root.querySelectorAll('.add-question').forEach(btn=> btn.addEventListener('click', ()=>{
+    const container = btn.previousElementSibling;
+    const div = document.createElement('div');
+    div.innerHTML = editorQuestionHTML({id:genId('q'), label:'', type:'text', options:[], hasOther:false});
+    container.appendChild(div.firstElementChild);
+    bindEditorEvents();
+  }));
+  root.querySelectorAll('.del-section').forEach(btn=> btn.addEventListener('click', ()=>{
+    if(confirm('Supprimer cette section et toutes ses questions ?')) btn.closest('.editor-section').remove();
+  }));
+  const addSectionBtn = document.getElementById('addSectionBtn');
+  if(addSectionBtn) addSectionBtn.onclick = ()=>{
+    const div = document.createElement('div');
+    div.innerHTML = editorSectionHTML({id:genId('sec'), title:'Nouvelle section', questions:[]});
+    document.getElementById('editorContainer').appendChild(div.firstElementChild);
+    bindEditorEvents();
+  };
+  const saveBtn = document.getElementById('saveSchemaBtn');
+  if(saveBtn) saveBtn.onclick = async ()=>{
+    const newSchema = {title:schemas[currentGuide].title, sections:[]};
+    document.querySelectorAll('#editorContainer .editor-section').forEach(secDiv=>{
+      const title = secDiv.querySelector('.section-title-input').value.trim() || 'Section';
+      const questions = [];
+      secDiv.querySelectorAll('.editor-question').forEach(qDiv=>{
+        const label = qDiv.querySelector('.q-label').value.trim();
+        if(!label) return;
+        const type = qDiv.querySelector('.q-type').value;
+        const isChoice = type==='single'||type==='multi';
+        const opts = isChoice ? qDiv.querySelector('.opts').value.split('\n').map(s=>s.trim()).filter(Boolean) : [];
+        const hasOther = isChoice && qDiv.querySelector('.q-other').checked;
+        questions.push({id:qDiv.dataset.qid, label, type, options:opts, hasOther});
+      });
+      newSchema.sections.push({id:secDiv.dataset.sectionId, title, questions});
+    });
+    schemas[currentGuide] = newSchema;
+    await saveSchema(currentGuide);
+    renderForm(); renderTable();
+    showToast('Questions mises à jour');
+  };
+  const resetBtn = document.getElementById('resetSchemaBtn');
+  if(resetBtn) resetBtn.onclick = async ()=>{
+    if(!confirm('Réinitialiser ce guide aux questions par défaut ? Les modifications seront perdues.')) return;
+    schemas[currentGuide] = JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[currentGuide]));
+    await saveSchema(currentGuide);
+    renderEditor(); renderForm(); renderTable();
+    showToast('Guide réinitialisé');
+  };
+}
+
+/* ---------------- NAVIGATION ---------------- */
+function selectGuide(guide){
+  currentGuide = guide;
+  document.getElementById('landing').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('guideTitle').textContent = schemas[guide].title;
+  document.getElementById('guideSub').textContent = 'AgriCréditPlus — données partagées entre enquêteurs';
+  showTab('form');
+  renderForm(); renderTable(); renderEditor();
+}
+function showTab(tab){
+  ['form','table','editor'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===tab ? 'block':'none';
+  });
+  document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
+  document.getElementById('formActionBar').style.display = tab==='form' ? 'flex' : 'none';
+}
+
+document.querySelectorAll('.guide-card').forEach(card=>{
+  card.addEventListener('click', ()=> selectGuide(card.dataset.guide));
+});
+document.querySelectorAll('.tab-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=> showTab(btn.dataset.tab));
+});
+document.getElementById('backToLanding').addEventListener('click', ()=>{
+  document.getElementById('app').style.display='none';
+  document.getElementById('landing').style.display='flex';
+  loadAll();
+});
+document.getElementById('saveBtn').addEventListener('click', async ()=>{
+  const fiche = {id:genId('f'), createdAt:new Date().toISOString(), answers:collectAnswers()};
+  entriesByGuide[currentGuide].push(fiche);
+  await saveEntries(currentGuide);
+  renderTable();
+  showToast('Fiche enregistrée');
+  clearForm();
+});
+document.getElementById('resetBtn').addEventListener('click', ()=>{ clearForm(); showToast('Nouvelle fiche prête'); });
+
+loadAll();
+})();
+</script>
+</body>
+</html>
