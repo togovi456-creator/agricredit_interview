@@ -36,13 +36,11 @@
     outline:2px solid var(--accent); outline-offset:2px;
   }
 
+  /* ---------- LANDING ---------- */
   .landing{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:24px;}
   .landing-inner{max-width:640px; width:100%;}
   .landing-inner h1{font-size:1.5rem;}
   .landing-inner .sub{color:var(--text-soft); margin:6px 0 28px; font-size:.95rem;}
-  .conn-status{font-size:.78rem; color:var(--text-faint); margin-bottom:18px;}
-  .conn-status.ok{color:var(--accent-text);}
-  .conn-status.err{color:var(--danger);}
   .guide-cards{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
   .guide-card{
     background:var(--surface); border:1px solid var(--border); border-radius:10px;
@@ -53,6 +51,7 @@
   .guide-card .count{display:block; margin-top:6px; font-size:.8rem; color:var(--text-soft);}
   @media (max-width:480px){ .guide-cards{grid-template-columns:1fr;} }
 
+  /* ---------- APP HEADER ---------- */
   #app{display:none;}
   header.top{
     background:var(--surface); border-bottom:1px solid var(--border);
@@ -77,6 +76,7 @@
 
   main{max-width:960px; margin:0 auto; padding:20px 16px 80px;}
 
+  /* ---------- FORM ---------- */
   .section{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px 16px 18px; margin-bottom:14px;}
   .section h2{font-size:.98rem; margin-bottom:14px; color:var(--accent-text);}
   .field{margin-bottom:14px;}
@@ -109,6 +109,7 @@
   }
   #toast.show{transform:translateX(-50%) translateY(0);}
 
+  /* ---------- TABLE ---------- */
   .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:10px; background:var(--surface);}
   table{border-collapse:collapse; width:100%; font-size:.82rem;}
   th,td{padding:9px 12px; text-align:left; border-bottom:1px solid var(--border); white-space:nowrap; max-width:220px; overflow:hidden; text-overflow:ellipsis;}
@@ -120,6 +121,7 @@
   .empty-note{color:var(--text-soft); font-size:.88rem; text-align:center; padding:40px 10px;}
   .toolbar{display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;}
 
+  /* ---------- EDITOR ---------- */
   .editor-section{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:14px 14px 16px; margin-bottom:14px;}
   .editor-section .sec-head{display:flex; gap:8px; align-items:center; margin-bottom:12px;}
   .editor-section .sec-head input{font-size:.95rem; font-weight:500;}
@@ -143,15 +145,14 @@
   <div class="landing-inner">
     <h1>AgriCréditPlus</h1>
     <p class="sub">Choisissez le guide d'entretien à utiliser.</p>
-    <div class="conn-status" id="connStatus">Connexion à la base…</div>
     <div class="guide-cards">
       <button class="guide-card" data-guide="agriculteurs" type="button">
         <span class="name">Agriculteurs</span>
-        <span class="count" id="countAgri">—</span>
+        <span class="count" id="countAgri"></span>
       </button>
       <button class="guide-card" data-guide="institutions" type="button">
         <span class="name">Institutions financières</span>
-        <span class="count" id="countInst">—</span>
+        <span class="count" id="countInst"></span>
       </button>
     </div>
   </div>
@@ -183,26 +184,11 @@
   </div>
 </div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import {
-  getFirestore, doc, getDoc, setDoc, addDoc, deleteDoc,
-  collection, onSnapshot
-} from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+<script>
+(function(){
 
-const firebaseConfig = {
-  apiKey: "AIzaSyC94ad88WJq6gMvYBiWFi8s8sZnaOlqqmE",
-  authDomain: "agricreditplus.firebaseapp.com",
-  projectId: "agricreditplus",
-  storageBucket: "agricreditplus.firebasestorage.app",
-  messagingSenderId: "799265280189",
-  appId: "1:799265280189:web:5309856ef77e9d33a727d4"
-};
-const fbApp = initializeApp(firebaseConfig);
-const db = getFirestore(fbApp);
-
-function q(id,label,type,options,hasOther){ return {id,label,type,options:options||[],hasOther:!!hasOther}; }
-function sec(id,title,questions){ return {id,title,questions}; }
+function q(id,label,type,options,hasOther){ return {id:id,label:label,type:type,options:options||[],hasOther:!!hasOther}; }
+function sec(id,title,questions){ return {id:id,title:title,questions:questions}; }
 
 const DEFAULT_SCHEMAS = {
   agriculteurs:{ title:"Agriculteurs", sections:[
@@ -348,59 +334,40 @@ const DEFAULT_SCHEMAS = {
 };
 
 let currentGuide = null;
-let currentTab = 'form';
-let schemas = { agriculteurs: DEFAULT_SCHEMAS.agriculteurs, institutions: DEFAULT_SCHEMAS.institutions };
-let entriesByGuide = { agriculteurs: [], institutions: [] };
+let schemas = {};
+let entriesByGuide = {agriculteurs:[], institutions:[]};
 
 function genId(prefix){ return prefix + '_' + Date.now() + '_' + Math.floor(Math.random()*1000); }
 function flatQuestions(schema){ return schema.sections.reduce((acc,s)=>acc.concat(s.questions),[]); }
-function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+async function loadAll(){
+  for(const g of ['agriculteurs','institutions']){
+    try{
+      const r = await window.storage.get('agricredit_schema_'+g, true);
+      schemas[g] = r && r.value ? JSON.parse(r.value) : JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[g]));
+    }catch(e){ schemas[g] = JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[g])); }
+    try{
+      const r2 = await window.storage.get('agricredit_entries_'+g, true);
+      entriesByGuide[g] = r2 && r2.value ? JSON.parse(r2.value) : [];
+    }catch(e){ entriesByGuide[g] = []; }
+  }
+  document.getElementById('countAgri').textContent = entriesByGuide.agriculteurs.length + ' fiche(s) enregistrée(s)';
+  document.getElementById('countInst').textContent = entriesByGuide.institutions.length + ' fiche(s) enregistrée(s)';
+}
+async function saveSchema(guide){
+  try{ await window.storage.set('agricredit_schema_'+guide, JSON.stringify(schemas[guide]), true); }
+  catch(e){ showToast('Erreur de sauvegarde du schéma'); }
+}
+async function saveEntries(guide){
+  try{ await window.storage.set('agricredit_entries_'+guide, JSON.stringify(entriesByGuide[guide]), true); }
+  catch(e){ showToast('Erreur de sauvegarde de la fiche'); }
+}
 
 let toastTimer;
 function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),2200);
-}
-
-/* ---------------- FIREBASE REALTIME WIRING ---------------- */
-const connStatus = document.getElementById('connStatus');
-let connOkCount = 0;
-function markConnected(){
-  connOkCount++;
-  connStatus.textContent = 'Connecté — synchronisation en temps réel active';
-  connStatus.className = 'conn-status ok';
-}
-function markError(err){
-  connStatus.textContent = 'Connexion à la base impossible — vérifiez la configuration Firebase';
-  connStatus.className = 'conn-status err';
-  console.error(err);
-}
-
-for(const guide of ['agriculteurs','institutions']){
-  onSnapshot(doc(db,'schemas',guide), async (snap)=>{
-    if(!snap.exists()){
-      try{ await setDoc(doc(db,'schemas',guide), DEFAULT_SCHEMAS[guide]); }catch(e){ markError(e); }
-      return;
-    }
-    schemas[guide] = snap.data();
-    markConnected();
-    if(currentGuide===guide){
-      renderForm();
-      renderTable();
-      if(currentTab==='editor') renderEditor();
-    }
-  }, markError);
-
-  onSnapshot(collection(db,'entries_'+guide), (snap)=>{
-    entriesByGuide[guide] = snap.docs
-      .map(d=>({id:d.id, ...d.data()}))
-      .sort((a,b)=> (a.createdAt||'').localeCompare(b.createdAt||''));
-    markConnected();
-    const el = document.getElementById(guide==='agriculteurs'?'countAgri':'countInst');
-    if(el) el.textContent = entriesByGuide[guide].length + ' fiche(s) enregistrée(s)';
-    if(currentGuide===guide) renderTable();
-  }, markError);
 }
 
 /* ---------------- FORM RENDERING ---------------- */
@@ -419,8 +386,9 @@ function fieldHTML(question){
   }
   return '';
 }
+function esc(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 function renderForm(){
-  if(!currentGuide) return;
   const schema = schemas[currentGuide];
   let html = '';
   schema.sections.forEach(s=>{
@@ -465,7 +433,6 @@ function collectAnswers(){
     const qid=qn.id;
     if(qn.type==='single'||qn.type==='multi'){
       const group = document.getElementById('f_'+qid);
-      if(!group){ answers[qid]= qn.type==='single' ? '' : []; return; }
       let vals = Array.from(group.querySelectorAll('.chip.selected')).map(c=>c.dataset.value);
       const otherInput = document.getElementById('f_'+qid+'__other');
       if(otherInput && vals.includes('Autre')){
@@ -485,7 +452,6 @@ function clearForm(){
   flatQuestions(schema).forEach(qn=>{
     if(qn.type==='single'||qn.type==='multi'){
       const group = document.getElementById('f_'+qn.id);
-      if(!group) return;
       group.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
       const otherInput = document.getElementById('f_'+qn.id+'__other');
       if(otherInput){ otherInput.classList.remove('show'); otherInput.value=''; }
@@ -502,7 +468,6 @@ function formatVal(v){
   return (v===undefined||v===null||v==='') ? '—' : String(v);
 }
 function renderTable(){
-  if(!currentGuide) return;
   const schema = schemas[currentGuide];
   const qs = flatQuestions(schema);
   const entries = entriesByGuide[currentGuide];
@@ -514,7 +479,7 @@ function renderTable(){
     qs.forEach(qn=> html += `<th title="${esc(qn.label)}">${esc(qn.label)}</th>`);
     html += `<th></th></tr></thead><tbody>`;
     entries.slice().reverse().forEach(f=>{
-      html += `<tr><td>${esc(f.createdAt ? new Date(f.createdAt).toLocaleString('fr-FR') : '')}</td>`;
+      html += `<tr><td>${esc(new Date(f.createdAt).toLocaleString('fr-FR'))}</td>`;
       qs.forEach(qn=>{
         const v = f.answers ? f.answers[qn.id] : undefined;
         const disp = formatVal(v);
@@ -530,8 +495,10 @@ function renderTable(){
   document.querySelectorAll('.del-entry').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(confirm('Supprimer cette fiche ?')){
-        try{ await deleteDoc(doc(db,'entries_'+currentGuide, btn.dataset.id)); showToast('Fiche supprimée'); }
-        catch(e){ showToast('Erreur de suppression'); }
+        entriesByGuide[currentGuide] = entriesByGuide[currentGuide].filter(f=>f.id!==btn.dataset.id);
+        await saveEntries(currentGuide);
+        renderTable();
+        showToast('Fiche supprimée');
       }
     });
   });
@@ -548,7 +515,7 @@ function exportCSV(){
   if(entries.length===0){ showToast('Aucune fiche à exporter'); return; }
   const header = ['Horodatage'].concat(qs.map(q=>q.label)).map(csvEscape).join(',');
   const rows = entries.map(f=>{
-    const cells = [f.createdAt || ''];
+    const cells = [new Date(f.createdAt).toISOString()];
     qs.forEach(qn=>{
       const v = f.answers ? f.answers[qn.id] : '';
       cells.push(Array.isArray(v)? v.join(' | ') : (v||''));
@@ -566,7 +533,6 @@ function exportCSV(){
 
 /* ---------------- EDITOR RENDERING ---------------- */
 function renderEditor(){
-  if(!currentGuide) return;
   const schema = schemas[currentGuide];
   let html = `<div id="editorContainer">`;
   schema.sections.forEach(s=>{ html += editorSectionHTML(s); });
@@ -671,18 +637,18 @@ function bindEditorEvents(){
       });
       newSchema.sections.push({id:secDiv.dataset.sectionId, title, questions});
     });
-    try{
-      await setDoc(doc(db,'schemas',currentGuide), newSchema);
-      showToast('Questions mises à jour pour tout le monde');
-    }catch(e){ showToast('Erreur de sauvegarde'); console.error(e); }
+    schemas[currentGuide] = newSchema;
+    await saveSchema(currentGuide);
+    renderForm(); renderTable();
+    showToast('Questions mises à jour');
   };
   const resetBtn = document.getElementById('resetSchemaBtn');
   if(resetBtn) resetBtn.onclick = async ()=>{
-    if(!confirm('Réinitialiser ce guide aux questions par défaut ? Les modifications seront perdues pour tout le monde.')) return;
-    try{
-      await setDoc(doc(db,'schemas',currentGuide), DEFAULT_SCHEMAS[currentGuide]);
-      showToast('Guide réinitialisé');
-    }catch(e){ showToast('Erreur de réinitialisation'); }
+    if(!confirm('Réinitialiser ce guide aux questions par défaut ? Les modifications seront perdues.')) return;
+    schemas[currentGuide] = JSON.parse(JSON.stringify(DEFAULT_SCHEMAS[currentGuide]));
+    await saveSchema(currentGuide);
+    renderEditor(); renderForm(); renderTable();
+    showToast('Guide réinitialisé');
   };
 }
 
@@ -692,18 +658,16 @@ function selectGuide(guide){
   document.getElementById('landing').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('guideTitle').textContent = schemas[guide].title;
-  document.getElementById('guideSub').textContent = 'AgriCréditPlus — données partagées en temps réel entre enquêteurs';
+  document.getElementById('guideSub').textContent = 'AgriCréditPlus — données partagées entre enquêteurs';
   showTab('form');
   renderForm(); renderTable(); renderEditor();
 }
 function showTab(tab){
-  currentTab = tab;
   ['form','table','editor'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab ? 'block':'none';
   });
   document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
   document.getElementById('formActionBar').style.display = tab==='form' ? 'flex' : 'none';
-  if(tab==='editor') renderEditor();
 }
 
 document.querySelectorAll('.guide-card').forEach(card=>{
@@ -715,16 +679,20 @@ document.querySelectorAll('.tab-btn').forEach(btn=>{
 document.getElementById('backToLanding').addEventListener('click', ()=>{
   document.getElementById('app').style.display='none';
   document.getElementById('landing').style.display='flex';
+  loadAll();
 });
 document.getElementById('saveBtn').addEventListener('click', async ()=>{
-  try{
-    await addDoc(collection(db,'entries_'+currentGuide), {createdAt:new Date().toISOString(), answers:collectAnswers()});
-    showToast('Fiche enregistrée');
-    clearForm();
-  }catch(e){ showToast('Erreur d\'enregistrement'); console.error(e); }
+  const fiche = {id:genId('f'), createdAt:new Date().toISOString(), answers:collectAnswers()};
+  entriesByGuide[currentGuide].push(fiche);
+  await saveEntries(currentGuide);
+  renderTable();
+  showToast('Fiche enregistrée');
+  clearForm();
 });
 document.getElementById('resetBtn').addEventListener('click', ()=>{ clearForm(); showToast('Nouvelle fiche prête'); });
 
+loadAll();
+})();
 </script>
 </body>
 </html>
