@@ -133,16 +133,6 @@
   .editor-question label.other-toggle.show{display:flex;}
   .q-actions{display:flex; gap:6px; justify-content:flex-end;}
   .editor-footer{display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;}
-
-  .metric-block{margin-bottom:16px;}
-  .metric-block:last-child{margin-bottom:0;}
-  .metric-q{font-size:.88rem; margin-bottom:8px; color:var(--text);}
-  .metric-row{display:flex; align-items:center; gap:8px; margin-bottom:6px;}
-  .metric-label{width:170px; flex-shrink:0; font-size:.8rem; color:var(--text-soft); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-  .metric-bar{flex:1; background:var(--surface-2); border:1px solid var(--border); border-radius:4px; height:9px; overflow:hidden;}
-  .metric-fill{background:var(--accent); height:100%;}
-  .metric-val{width:78px; text-align:right; font-size:.78rem; color:var(--text-soft); flex-shrink:0;}
-  .metric-note{font-size:.78rem; color:var(--text-faint); margin-top:2px;}
 </style>
 </head>
 <body>
@@ -176,7 +166,6 @@
     <div class="tabs">
       <button class="tab-btn" data-tab="form" type="button">Nouvelle fiche</button>
       <button class="tab-btn" data-tab="table" type="button">Toutes les fiches</button>
-      <button class="tab-btn" data-tab="metrics" type="button">Métriques</button>
       <button class="tab-btn" data-tab="editor" type="button">Modifier les questions</button>
     </div>
     <button class="btn small" id="backToLanding" type="button">Changer de guide</button>
@@ -185,7 +174,6 @@
   <main>
     <div id="tab-form"></div>
     <div id="tab-table" style="display:none;"></div>
-    <div id="tab-metrics" style="display:none;"></div>
     <div id="tab-editor" style="display:none;"></div>
   </main>
 
@@ -414,7 +402,7 @@ for(const guide of ['agriculteurs','institutions']){
     markConnected();
     const el = document.getElementById(guide==='agriculteurs'?'countAgri':'countInst');
     if(el) el.textContent = entriesByGuide[guide].length + ' fiche(s) enregistrée(s)';
-    if(currentGuide===guide){ renderTable(); if(currentTab==='metrics') renderMetrics(); }
+    if(currentGuide===guide) renderTable();
   }, markError);
 }
 
@@ -649,117 +637,6 @@ function exportXLSX(){
   showToast(entries.length+' fiche(s) exportée(s) en XLSX');
 }
 
-/* ---------------- METRICS ---------------- */
-function computeMetrics(schema, entries){
-  const total = entries.length;
-  return flatQuestions(schema).map(qn=>{
-    if(qn.type==='single' || qn.type==='multi'){
-      const counts = {};
-      let answered = 0;
-      entries.forEach(f=>{
-        const v = f.answers ? f.answers[qn.id] : undefined;
-        const vals = qn.type==='single' ? (v?[v]:[]) : (Array.isArray(v)?v:[]);
-        if(vals.length) answered++;
-        vals.forEach(val=>{ counts[val] = (counts[val]||0)+1; });
-      });
-      return {question:qn, type:'choice', answered, counts};
-    }
-    if(qn.type==='number'){
-      const nums = entries.map(f=> f.answers ? parseFloat(f.answers[qn.id]) : NaN).filter(n=>!isNaN(n));
-      return {
-        question:qn, type:'number', answered:nums.length,
-        avg: nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null,
-        min: nums.length ? Math.min(...nums) : null,
-        max: nums.length ? Math.max(...nums) : null
-      };
-    }
-    const answered = entries.filter(f=> f.answers && f.answers[qn.id] && String(f.answers[qn.id]).trim()!=='').length;
-    return {question:qn, type:'text', answered};
-  });
-}
-function groupChoiceCounts(qn, counts){
-  const optsOrder = qn.options.concat(qn.hasOther?['Autre']:[]);
-  const grouped = {};
-  Object.keys(counts).forEach(k=>{
-    const key = k.indexOf('Autre')===0 ? 'Autre' : k;
-    grouped[key] = (grouped[key]||0) + counts[k];
-  });
-  const allKeys = Array.from(new Set([...optsOrder, ...Object.keys(grouped)]));
-  return allKeys.map(k=>({label:k, count:grouped[k]||0}));
-}
-function metricBlockHTML(r, total){
-  const qn = r.question;
-  let inner = `<div class="metric-block"><div class="metric-q">${esc(qn.label)}</div>`;
-  if(r.type==='choice'){
-    groupChoiceCounts(qn, r.counts).forEach(o=>{
-      const pct = total ? Math.round(o.count/total*100) : 0;
-      inner += `<div class="metric-row"><span class="metric-label" title="${esc(o.label)}">${esc(o.label)}</span><div class="metric-bar"><div class="metric-fill" style="width:${pct}%"></div></div><span class="metric-val">${o.count} (${pct}%)</span></div>`;
-    });
-    inner += `<div class="metric-note">${r.answered}/${total} ont répondu</div>`;
-  } else if(r.type==='number'){
-    inner += `<div class="metric-note">${r.answered}/${total} réponses — moyenne ${r.avg!==null?r.avg.toFixed(1):'—'}, min ${r.min!==null?r.min:'—'}, max ${r.max!==null?r.max:'—'}</div>`;
-  } else {
-    inner += `<div class="metric-note">${r.answered}/${total} réponses renseignées</div>`;
-  }
-  inner += `</div>`;
-  return inner;
-}
-function renderMetrics(){
-  if(!currentGuide) return;
-  const schema = schemas[currentGuide];
-  const entries = entriesByGuide[currentGuide];
-  let html = `<div class="toolbar"><div>${entries.length} fiche(s) analysée(s)</div><button class="btn" id="exportMetricsBtn" type="button">Exporter les métriques (CSV)</button></div>`;
-  if(entries.length===0){
-    html += `<p class="empty-note">Aucune donnée à analyser pour le moment.</p>`;
-    document.getElementById('tab-metrics').innerHTML = html;
-    return;
-  }
-  const results = computeMetrics(schema, entries);
-  let idx=0;
-  schema.sections.forEach(s=>{
-    html += `<div class="section"><h2>${esc(s.title)}</h2>`;
-    s.questions.forEach(()=>{ html += metricBlockHTML(results[idx], entries.length); idx++; });
-    html += `</div>`;
-  });
-  document.getElementById('tab-metrics').innerHTML = html;
-  const btn = document.getElementById('exportMetricsBtn');
-  if(btn) btn.addEventListener('click', exportMetricsCSV);
-}
-function exportMetricsCSV(){
-  const schema = schemas[currentGuide];
-  const entries = entriesByGuide[currentGuide];
-  if(entries.length===0){ showToast('Aucune donnée à exporter'); return; }
-  const results = computeMetrics(schema, entries);
-  const rows = [['Section','Question','Type','Option / Statistique','Valeur']];
-  let idx=0;
-  schema.sections.forEach(s=>{
-    s.questions.forEach(()=>{
-      const r = results[idx]; idx++;
-      const qn = r.question;
-      if(r.type==='choice'){
-        groupChoiceCounts(qn, r.counts).forEach(o=>{
-          const pct = entries.length ? Math.round(o.count/entries.length*100) : 0;
-          rows.push([s.title, qn.label, 'Choix', o.label, o.count+' ('+pct+'%)']);
-        });
-      } else if(r.type==='number'){
-        rows.push([s.title, qn.label, 'Nombre', 'Réponses', r.answered+'/'+entries.length]);
-        rows.push([s.title, qn.label, 'Nombre', 'Moyenne', r.avg!==null?r.avg.toFixed(2):'']);
-        rows.push([s.title, qn.label, 'Nombre', 'Min', r.min!==null?r.min:'']);
-        rows.push([s.title, qn.label, 'Nombre', 'Max', r.max!==null?r.max:'']);
-      } else {
-        rows.push([s.title, qn.label, 'Texte', 'Réponses renseignées', r.answered+'/'+entries.length]);
-      }
-    });
-  });
-  const csv = '\uFEFF'+rows.map(r=>r.map(csvEscape).join(',')).join('\n');
-  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href=url; a.download = 'agricredit-metriques-'+currentGuide+'-'+new Date().toISOString().slice(0,10)+'.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-  showToast('Métriques exportées');
-}
-
 /* ---------------- EDITOR RENDERING ---------------- */
 function renderEditor(){
   if(!currentGuide) return;
@@ -896,13 +773,12 @@ function selectGuide(guide){
 }
 function showTab(tab){
   currentTab = tab;
-  ['form','table','metrics','editor'].forEach(t=>{
+  ['form','table','editor'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab ? 'block':'none';
   });
   document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
   document.getElementById('formActionBar').style.display = tab==='form' ? 'flex' : 'none';
   if(tab==='editor') renderEditor();
-  if(tab==='metrics') renderMetrics();
 }
 
 document.querySelectorAll('.guide-card').forEach(card=>{
