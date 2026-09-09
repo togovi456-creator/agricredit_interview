@@ -143,27 +143,6 @@
   .metric-fill{background:var(--accent); height:100%;}
   .metric-val{width:78px; text-align:right; font-size:.78rem; color:var(--text-soft); flex-shrink:0;}
   .metric-note{font-size:.78rem; color:var(--text-faint); margin-top:2px;}
-
-  .proof-preview{display:flex; align-items:center; gap:10px; margin-top:8px;}
-  .proof-preview img{max-width:90px; max-height:90px; border-radius:6px; border:1px solid var(--border); display:none;}
-  .proof-filename{font-size:.8rem; color:var(--text-soft);}
-
-  .admin-shell{display:flex; gap:20px; align-items:flex-start;}
-  .admin-sidebar{display:flex; flex-direction:column; gap:3px; width:180px; flex-shrink:0; background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:10px;}
-  .admin-nav-btn{border:none; background:none; text-align:left; padding:9px 10px; border-radius:8px; font-size:.86rem; color:var(--text-soft); cursor:pointer; font-family:inherit;}
-  .admin-nav-btn:hover{background:var(--surface-2);}
-  .admin-nav-btn.active{background:var(--accent-soft); color:var(--accent-text); font-weight:500;}
-  .admin-content{flex:1; min-width:0;}
-  .admin-metrics-filter{margin-bottom:14px;}
-  @media (max-width:680px){
-    .admin-shell{flex-direction:column;}
-    .admin-sidebar{width:100%; flex-direction:row; overflow-x:auto;}
-  }
-  .stat-cards{display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px;}
-  .stat-card{background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:16px; text-align:center;}
-  .stat-card .num{font-size:1.4rem; font-family:'Space Mono',monospace; color:var(--accent-text);}
-  .stat-card .label{font-size:.78rem; color:var(--text-soft); margin-top:4px;}
-  @media (max-width:480px){ .stat-cards{grid-template-columns:1fr;} }
 </style>
 </head>
 <body>
@@ -198,7 +177,7 @@
       <button class="tab-btn" data-tab="form" type="button">Nouvelle fiche</button>
       <button class="tab-btn" data-tab="table" type="button">Toutes les fiches</button>
       <button class="tab-btn" data-tab="metrics" type="button">Métriques</button>
-      <button class="tab-btn" data-tab="admin" type="button">Admin</button>
+      <button class="tab-btn" data-tab="editor" type="button">Modifier les questions</button>
     </div>
     <button class="btn small" id="backToLanding" type="button">Changer de guide</button>
   </header>
@@ -207,7 +186,7 @@
     <div id="tab-form"></div>
     <div id="tab-table" style="display:none;"></div>
     <div id="tab-metrics" style="display:none;"></div>
-    <div id="tab-admin" style="display:none;"></div>
+    <div id="tab-editor" style="display:none;"></div>
   </main>
 
   <div class="action-bar" id="formActionBar">
@@ -424,9 +403,8 @@ for(const guide of ['agriculteurs','institutions']){
     if(currentGuide===guide){
       renderForm();
       renderTable();
-      if(currentTab==='metrics') renderMetrics();
+      if(currentTab==='editor') renderEditor();
     }
-    if(currentTab==='admin' && adminUnlocked) renderAdminContent();
   }, markError);
 
   onSnapshot(collection(db,'entries_'+guide), (snap)=>{
@@ -437,7 +415,6 @@ for(const guide of ['agriculteurs','institutions']){
     const el = document.getElementById(guide==='agriculteurs'?'countAgri':'countInst');
     if(el) el.textContent = entriesByGuide[guide].length + ' fiche(s) enregistrée(s)';
     if(currentGuide===guide){ renderTable(); if(currentTab==='metrics') renderMetrics(); }
-    if(currentTab==='admin' && adminUnlocked) renderAdminContent();
   }, markError);
 }
 
@@ -455,19 +432,6 @@ function fieldHTML(question){
     return `<div class="field"><label>${esc(question.label)}</label>
       <div class="chip-group" id="f_${qid}" data-mode="${question.type}">${chips}</div>${otherBox}</div>`;
   }
-  if(question.type==='proof'){
-    return `<div class="field"><label>${esc(question.label)} (optionnel)</label>
-      <input type="text" id="f_${qid}__link" placeholder="Lien (photo, vidéo, document...)">
-      <input type="file" id="f_${qid}__file" accept="image/*,application/pdf" style="margin-top:8px;">
-      <input type="hidden" id="f_${qid}__data">
-      <input type="hidden" id="f_${qid}__filename">
-      <div id="f_${qid}__preview" class="proof-preview" style="display:none;">
-        <img alt="Aperçu">
-        <span class="proof-filename"></span>
-        <button type="button" id="f_${qid}__remove" class="btn small">Retirer</button>
-      </div>
-    </div>`;
-  }
   return '';
 }
 function renderForm(){
@@ -481,72 +445,6 @@ function renderForm(){
   });
   document.getElementById('tab-form').innerHTML = html;
   setupChipGroups(document.getElementById('tab-form'));
-  flatQuestions(schema).filter(qn=>qn.type==='proof').forEach(qn=> setupProofField(qn.id));
-}
-function setupProofField(qid){
-  const fileInput = document.getElementById('f_'+qid+'__file');
-  if(!fileInput) return;
-  fileInput.addEventListener('change', (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-    if(file.type.startsWith('image/')){
-      const reader = new FileReader();
-      reader.onload = (ev)=>{
-        const img = new Image();
-        img.onload = ()=>{
-          const maxDim=800; let w=img.width,h=img.height;
-          if(w>h && w>maxDim){ h=Math.round(h*maxDim/w); w=maxDim; }
-          else if(h>maxDim){ w=Math.round(w*maxDim/h); h=maxDim; }
-          const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
-          canvas.getContext('2d').drawImage(img,0,0,w,h);
-          document.getElementById('f_'+qid+'__data').value = canvas.toDataURL('image/jpeg',0.7);
-          document.getElementById('f_'+qid+'__filename').value = file.name;
-          updateProofPreview(qid);
-          showToast('Fichier ajouté');
-        };
-        img.src = ev.target.result;
-      };
-      reader.readAsDataURL(file);
-    } else {
-      const reader = new FileReader();
-      reader.onload = (ev)=>{
-        document.getElementById('f_'+qid+'__data').value = ev.target.result;
-        document.getElementById('f_'+qid+'__filename').value = file.name;
-        updateProofPreview(qid);
-        showToast('Fichier ajouté');
-      };
-      reader.readAsDataURL(file);
-    }
-  });
-  const removeBtn = document.getElementById('f_'+qid+'__remove');
-  if(removeBtn) removeBtn.addEventListener('click', ()=>{
-    document.getElementById('f_'+qid+'__data').value='';
-    document.getElementById('f_'+qid+'__filename').value='';
-    fileInput.value='';
-    updateProofPreview(qid);
-  });
-}
-function updateProofPreview(qid){
-  const dataEl = document.getElementById('f_'+qid+'__data');
-  const nameEl = document.getElementById('f_'+qid+'__filename');
-  const wrap = document.getElementById('f_'+qid+'__preview');
-  if(!dataEl || !wrap) return;
-  if(dataEl.value){
-    wrap.style.display='flex';
-    wrap.querySelector('.proof-filename').textContent = nameEl.value || 'Fichier joint';
-    const img = wrap.querySelector('img');
-    if(dataEl.value.indexOf('data:image')===0){ img.src=dataEl.value; img.style.display='block'; }
-    else { img.style.display='none'; }
-  } else {
-    wrap.style.display='none';
-  }
-}
-function formatProofVal(v){
-  if(!v || (!v.link && !v.fileData)) return '—';
-  const parts=[];
-  if(v.link) parts.push('Lien: '+v.link);
-  if(v.fileData) parts.push('Fichier: '+(v.fileName||'joint'));
-  return parts.join(' | ');
 }
 function setupChipGroups(container){
   container.querySelectorAll('.chip-group').forEach(group=>{
@@ -590,15 +488,6 @@ function collectAnswers(){
         vals = vals.map(v=> v==='Autre' ? ('Autre'+(txt?': '+txt:'')) : v);
       }
       answers[qid] = qn.type==='single' ? (vals[0]||'') : vals;
-    } else if(qn.type==='proof'){
-      const linkEl = document.getElementById('f_'+qid+'__link');
-      const dataEl = document.getElementById('f_'+qid+'__data');
-      const nameEl = document.getElementById('f_'+qid+'__filename');
-      answers[qid] = {
-        link: linkEl ? linkEl.value.trim() : '',
-        fileData: dataEl ? dataEl.value : '',
-        fileName: nameEl ? nameEl.value : ''
-      };
     } else {
       const el = document.getElementById('f_'+qid);
       answers[qid] = el ? el.value.trim() : '';
@@ -615,16 +504,6 @@ function clearForm(){
       group.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
       const otherInput = document.getElementById('f_'+qn.id+'__other');
       if(otherInput){ otherInput.classList.remove('show'); otherInput.value=''; }
-    } else if(qn.type==='proof'){
-      const linkEl = document.getElementById('f_'+qn.id+'__link');
-      const fileEl = document.getElementById('f_'+qn.id+'__file');
-      const dataEl = document.getElementById('f_'+qn.id+'__data');
-      const nameEl = document.getElementById('f_'+qn.id+'__filename');
-      if(linkEl) linkEl.value='';
-      if(fileEl) fileEl.value='';
-      if(dataEl) dataEl.value='';
-      if(nameEl) nameEl.value='';
-      updateProofPreview(qn.id);
     } else {
       const el = document.getElementById('f_'+qn.id);
       if(el) el.value='';
@@ -655,14 +534,6 @@ function fillForm(answers){
           if(matchVal==='Autre' && otherInput){ otherInput.classList.add('show'); otherInput.value=otherText; }
         }
       });
-    } else if(qn.type==='proof'){
-      const linkEl = document.getElementById('f_'+qn.id+'__link');
-      const dataEl = document.getElementById('f_'+qn.id+'__data');
-      const nameEl = document.getElementById('f_'+qn.id+'__filename');
-      if(linkEl) linkEl.value = (val && val.link) || '';
-      if(dataEl) dataEl.value = (val && val.fileData) || '';
-      if(nameEl) nameEl.value = (val && val.fileName) || '';
-      updateProofPreview(qn.id);
     } else {
       const el = document.getElementById('f_'+qn.id);
       if(el) el.value = val || '';
@@ -697,9 +568,8 @@ function renderTable(){
       html += `<tr><td>${esc(f.createdAt ? new Date(f.createdAt).toLocaleString('fr-FR') : '')}</td>`;
       qs.forEach(qn=>{
         const v = f.answers ? f.answers[qn.id] : undefined;
-        const disp = qn.type==='proof' ? formatProofVal(v) : formatVal(v);
-        const titleVal = qn.type==='proof' ? disp : (Array.isArray(v)?v.join(', '):(v||''));
-        html += `<td title="${esc(titleVal)}">${esc(disp)}</td>`;
+        const disp = formatVal(v);
+        html += `<td title="${esc(Array.isArray(v)?v.join(', '):(v||''))}">${esc(disp)}</td>`;
       });
       html += `<td><button class="btn small edit-entry" data-id="${f.id}" type="button">Modifier</button> <button class="btn small danger del-entry" data-id="${f.id}" type="button">Supprimer</button></td></tr>`;
     });
@@ -746,8 +616,7 @@ function exportCSV(){
     const cells = [f.createdAt || ''];
     qs.forEach(qn=>{
       const v = f.answers ? f.answers[qn.id] : '';
-      if(qn.type==='proof') cells.push(formatProofVal(v)==='—' ? '' : formatProofVal(v));
-      else cells.push(Array.isArray(v)? v.join(' | ') : (v||''));
+      cells.push(Array.isArray(v)? v.join(' | ') : (v||''));
     });
     return cells.map(csvEscape).join(',');
   });
@@ -769,8 +638,7 @@ function exportXLSX(){
     const row = [f.createdAt||''];
     qs.forEach(qn=>{
       const v = f.answers ? f.answers[qn.id] : '';
-      if(qn.type==='proof') row.push(formatProofVal(v)==='—' ? '' : formatProofVal(v));
-      else row.push(Array.isArray(v)? v.join(' | ') : (v||''));
+      row.push(Array.isArray(v)? v.join(' | ') : (v||''));
     });
     return row;
   });
@@ -805,13 +673,6 @@ function computeMetrics(schema, entries){
         max: nums.length ? Math.max(...nums) : null
       };
     }
-    if(qn.type==='proof'){
-      const answered = entries.filter(f=>{
-        const v = f.answers && f.answers[qn.id];
-        return v && (v.link || v.fileData);
-      }).length;
-      return {question:qn, type:'proof', answered};
-    }
     const answered = entries.filter(f=> f.answers && f.answers[qn.id] && String(f.answers[qn.id]).trim()!=='').length;
     return {question:qn, type:'text', answered};
   });
@@ -837,38 +698,36 @@ function metricBlockHTML(r, total){
     inner += `<div class="metric-note">${r.answered}/${total} ont répondu</div>`;
   } else if(r.type==='number'){
     inner += `<div class="metric-note">${r.answered}/${total} réponses — moyenne ${r.avg!==null?r.avg.toFixed(1):'—'}, min ${r.min!==null?r.min:'—'}, max ${r.max!==null?r.max:'—'}</div>`;
-  } else if(r.type==='proof'){
-    inner += `<div class="metric-note">${r.answered}/${total} fiches ont une preuve jointe (lien ou fichier)</div>`;
   } else {
     inner += `<div class="metric-note">${r.answered}/${total} réponses renseignées</div>`;
   }
   inner += `</div>`;
   return inner;
 }
-function metricsSectionsHTML(schema, entries){
-  if(entries.length===0) return `<p class="empty-note">Aucune donnée à analyser pour le moment.</p>`;
+function renderMetrics(){
+  if(!currentGuide) return;
+  const schema = schemas[currentGuide];
+  const entries = entriesByGuide[currentGuide];
+  let html = `<div class="toolbar"><div>${entries.length} fiche(s) analysée(s)</div><button class="btn" id="exportMetricsBtn" type="button">Exporter les métriques (CSV)</button></div>`;
+  if(entries.length===0){
+    html += `<p class="empty-note">Aucune donnée à analyser pour le moment.</p>`;
+    document.getElementById('tab-metrics').innerHTML = html;
+    return;
+  }
   const results = computeMetrics(schema, entries);
-  let html=''; let idx=0;
+  let idx=0;
   schema.sections.forEach(s=>{
     html += `<div class="section"><h2>${esc(s.title)}</h2>`;
     s.questions.forEach(()=>{ html += metricBlockHTML(results[idx], entries.length); idx++; });
     html += `</div>`;
   });
-  return html;
-}
-function renderMetrics(){
-  if(!currentGuide) return;
-  const schema = schemas[currentGuide];
-  const entries = entriesByGuide[currentGuide];
-  const html = `<div class="toolbar"><div>${entries.length} fiche(s) analysée(s)</div><button class="btn" id="exportMetricsBtn" type="button">Exporter les métriques (CSV)</button></div>` + metricsSectionsHTML(schema, entries);
   document.getElementById('tab-metrics').innerHTML = html;
   const btn = document.getElementById('exportMetricsBtn');
-  if(btn) btn.addEventListener('click', ()=> exportMetricsCSV(currentGuide));
+  if(btn) btn.addEventListener('click', exportMetricsCSV);
 }
-function exportMetricsCSV(guide){
-  guide = guide || currentGuide;
-  const schema = schemas[guide];
-  const entries = entriesByGuide[guide];
+function exportMetricsCSV(){
+  const schema = schemas[currentGuide];
+  const entries = entriesByGuide[currentGuide];
   if(entries.length===0){ showToast('Aucune donnée à exporter'); return; }
   const results = computeMetrics(schema, entries);
   const rows = [['Section','Question','Type','Option / Statistique','Valeur']];
@@ -896,130 +755,25 @@ function exportMetricsCSV(guide){
   const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href=url; a.download = 'agricredit-metriques-'+guide+'-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.href=url; a.download = 'agricredit-metriques-'+currentGuide+'-'+new Date().toISOString().slice(0,10)+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   showToast('Métriques exportées');
 }
 
-/* ---------------- ADMIN PANEL (protégé) ---------------- */
-let adminUnlocked = false;
-let adminSection = 'metrics'; // 'metrics' | 'agriculteurs' | 'institutions'
-let adminMetricsFilter = 'all'; // 'all' | 'agriculteurs' | 'institutions'
-const ADMIN_PASSWORD = '@gri1234';
-
-function renderAdminTab(){
-  if(!adminUnlocked){
-    document.getElementById('tab-admin').innerHTML = `
-      <div class="section" style="max-width:360px; margin:60px auto;">
-        <h2>Accès administrateur</h2>
-        <p class="card-sub" style="margin-top:6px;">Ce panneau permet de consulter le tableau de bord et de modifier les questions des deux guides.</p>
-        <div class="field"><label>Mot de passe</label><input type="password" id="adminPasswordInput"></div>
-        <button class="btn primary" id="adminUnlockBtn" type="button" style="width:100%;">Déverrouiller</button>
-      </div>`;
-    const input = document.getElementById('adminPasswordInput');
-    const tryUnlock = ()=>{
-      if(input.value === ADMIN_PASSWORD){
-        adminUnlocked = true;
-        adminSection = 'metrics';
-        adminMetricsFilter = 'all';
-        showToast('Accès admin déverrouillé');
-        renderAdminTab();
-      } else {
-        showToast('Mot de passe incorrect');
-      }
-    };
-    document.getElementById('adminUnlockBtn').addEventListener('click', tryUnlock);
-    input.addEventListener('keydown', e=>{ if(e.key==='Enter') tryUnlock(); });
-    input.focus();
-    return;
-  }
-  renderAdminContent();
-}
-function renderAdminContent(){
-  const html = `
-    <div class="admin-shell">
-      <nav class="admin-sidebar">
-        <button class="admin-nav-btn ${adminSection==='metrics'?'active':''}" data-section="metrics" type="button">Métriques</button>
-        <button class="admin-nav-btn ${adminSection==='agriculteurs'?'active':''}" data-section="agriculteurs" type="button">Agriculteurs</button>
-        <button class="admin-nav-btn ${adminSection==='institutions'?'active':''}" data-section="institutions" type="button">Institutions</button>
-        <button class="btn small" id="adminLockBtn" type="button" style="margin-top:14px;">Verrouiller</button>
-      </nav>
-      <div class="admin-content" id="adminContentArea"></div>
-    </div>`;
-  document.getElementById('tab-admin').innerHTML = html;
-  document.querySelectorAll('.admin-nav-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=>{ adminSection = btn.dataset.section; renderAdminContent(); });
-  });
-  document.getElementById('adminLockBtn').addEventListener('click', ()=>{
-    adminUnlocked = false;
-    renderAdminTab();
-    showToast('Panneau verrouillé');
-  });
-  renderAdminSectionContent();
-}
-function renderAdminSectionContent(){
-  const area = document.getElementById('adminContentArea');
-  if(adminSection==='metrics'){
-    area.innerHTML = adminMetricsHTML();
-    bindAdminMetricsEvents();
-    return;
-  }
-  const guideKey = adminSection;
-  const schema = schemas[guideKey];
-  area.innerHTML = `
-    <h2 style="font-size:1rem; margin-bottom:4px;">${esc(schema.title)}</h2>
-    <p class="card-sub" style="margin:0 0 14px;">Modifier les questions de ce guide — les changements s'appliquent pour tout le monde dès l'enregistrement.</p>
-    <div id="editorContainer">${schema.sections.map(s=>editorSectionHTML(s)).join('')}</div>
+/* ---------------- EDITOR RENDERING ---------------- */
+function renderEditor(){
+  if(!currentGuide) return;
+  const schema = schemas[currentGuide];
+  let html = `<div id="editorContainer">`;
+  schema.sections.forEach(s=>{ html += editorSectionHTML(s); });
+  html += `</div>
     <div class="editor-footer">
       <button class="btn" id="addSectionBtn" type="button">+ Ajouter une section</button>
       <button class="btn primary" id="saveSchemaBtn" type="button">Enregistrer les modifications</button>
       <button class="btn danger" id="resetSchemaBtn" type="button">Réinitialiser aux valeurs par défaut</button>
     </div>`;
-  bindEditorEvents('adminContentArea', guideKey);
-}
-function adminMetricsHTML(){
-  let html = `<div class="admin-metrics-filter">
-    <div class="chip-group" id="adminMetricsFilterGroup" data-mode="single">
-      <div class="chip ${adminMetricsFilter==='all'?'selected':''}" data-value="all">Tous les entretiens</div>
-      <div class="chip ${adminMetricsFilter==='agriculteurs'?'selected':''}" data-value="agriculteurs">Agriculteurs</div>
-      <div class="chip ${adminMetricsFilter==='institutions'?'selected':''}" data-value="institutions">Institutions</div>
-    </div>
-  </div>`;
-  if(adminMetricsFilter==='all'){
-    const totalAll = entriesByGuide.agriculteurs.length + entriesByGuide.institutions.length;
-    html += `<div class="stat-cards">
-      <div class="stat-card"><div class="num">${totalAll}</div><div class="label">Fiches au total</div></div>
-      <div class="stat-card"><div class="num">${entriesByGuide.agriculteurs.length}</div><div class="label">Agriculteurs</div></div>
-      <div class="stat-card"><div class="num">${entriesByGuide.institutions.length}</div><div class="label">Institutions</div></div>
-    </div>`;
-    ['agriculteurs','institutions'].forEach(g=>{
-      html += `<h2 style="font-size:.95rem; margin:18px 0 10px; color:var(--accent-text);">${esc(schemas[g].title)}</h2>`;
-      html += `<div class="toolbar"><div>${entriesByGuide[g].length} fiche(s)</div><button class="btn small export-metrics-btn" data-guide="${g}" type="button">Exporter (CSV)</button></div>`;
-      html += metricsSectionsHTML(schemas[g], entriesByGuide[g]);
-    });
-  } else {
-    const g = adminMetricsFilter;
-    html += `<div class="stat-cards">
-      <div class="stat-card"><div class="num">${entriesByGuide[g].length}</div><div class="label">Fiches collectées</div></div>
-      <div class="stat-card"><div class="num">${schemas[g].sections.length}</div><div class="label">Sections</div></div>
-      <div class="stat-card"><div class="num">${flatQuestions(schemas[g]).length}</div><div class="label">Questions</div></div>
-    </div>`;
-    html += `<div class="toolbar"><div>Vue d'ensemble des réponses</div><button class="btn export-metrics-btn" data-guide="${g}" type="button">Exporter les métriques (CSV)</button></div>`;
-    html += metricsSectionsHTML(schemas[g], entriesByGuide[g]);
-  }
-  return html;
-}
-function bindAdminMetricsEvents(){
-  const group = document.getElementById('adminMetricsFilterGroup');
-  group.querySelectorAll('.chip').forEach(chip=>{
-    chip.addEventListener('click', ()=>{
-      adminMetricsFilter = chip.dataset.value;
-      renderAdminSectionContent();
-    });
-  });
-  document.querySelectorAll('.export-metrics-btn').forEach(btn=>{
-    btn.addEventListener('click', ()=> exportMetricsCSV(btn.dataset.guide));
-  });
+  document.getElementById('tab-editor').innerHTML = html;
+  bindEditorEvents();
 }
 function editorSectionHTML(s){
   let qhtml = s.questions.map(qn=>editorQuestionHTML(qn)).join('');
@@ -1044,7 +798,6 @@ function editorQuestionHTML(qn){
         <option value="date" ${qn.type==='date'?'selected':''}>Date</option>
         <option value="single" ${qn.type==='single'?'selected':''}>Choix unique</option>
         <option value="multi" ${qn.type==='multi'?'selected':''}>Choix multiple</option>
-        <option value="proof" ${qn.type==='proof'?'selected':''}>Preuve (lien ou fichier)</option>
       </select>
     </div>
     <textarea class="opts ${isChoice?'show':''}" placeholder="Une option par ligne">${esc(qn.options.join('\n'))}</textarea>
@@ -1056,9 +809,8 @@ function editorQuestionHTML(qn){
     </div>
   </div>`;
 }
-function bindEditorEvents(rootId, guideKey){
-  const root = document.getElementById(rootId || 'adminContentArea');
-  guideKey = guideKey || adminSection;
+function bindEditorEvents(){
+  const root = document.getElementById('tab-editor');
 
   root.querySelectorAll('.q-type').forEach(sel=>{
     sel.addEventListener('change', ()=>{
@@ -1086,22 +838,22 @@ function bindEditorEvents(rootId, guideKey){
     const div = document.createElement('div');
     div.innerHTML = editorQuestionHTML({id:genId('q'), label:'', type:'text', options:[], hasOther:false});
     container.appendChild(div.firstElementChild);
-    bindEditorEvents(rootId, guideKey);
+    bindEditorEvents();
   }));
   root.querySelectorAll('.del-section').forEach(btn=> btn.addEventListener('click', ()=>{
     if(confirm('Supprimer cette section et toutes ses questions ?')) btn.closest('.editor-section').remove();
   }));
-  const addSectionBtn = root.querySelector('#addSectionBtn');
+  const addSectionBtn = document.getElementById('addSectionBtn');
   if(addSectionBtn) addSectionBtn.onclick = ()=>{
     const div = document.createElement('div');
     div.innerHTML = editorSectionHTML({id:genId('sec'), title:'Nouvelle section', questions:[]});
-    root.querySelector('#editorContainer').appendChild(div.firstElementChild);
-    bindEditorEvents(rootId, guideKey);
+    document.getElementById('editorContainer').appendChild(div.firstElementChild);
+    bindEditorEvents();
   };
-  const saveBtn = root.querySelector('#saveSchemaBtn');
+  const saveBtn = document.getElementById('saveSchemaBtn');
   if(saveBtn) saveBtn.onclick = async ()=>{
-    const newSchema = {title:schemas[guideKey].title, sections:[]};
-    root.querySelectorAll('#editorContainer .editor-section').forEach(secDiv=>{
+    const newSchema = {title:schemas[currentGuide].title, sections:[]};
+    document.querySelectorAll('#editorContainer .editor-section').forEach(secDiv=>{
       const title = secDiv.querySelector('.section-title-input').value.trim() || 'Section';
       const questions = [];
       secDiv.querySelectorAll('.editor-question').forEach(qDiv=>{
@@ -1116,15 +868,15 @@ function bindEditorEvents(rootId, guideKey){
       newSchema.sections.push({id:secDiv.dataset.sectionId, title, questions});
     });
     try{
-      await setDoc(doc(db,'schemas',guideKey), newSchema);
+      await setDoc(doc(db,'schemas',currentGuide), newSchema);
       showToast('Questions mises à jour pour tout le monde');
     }catch(e){ showToast('Erreur de sauvegarde'); console.error(e); }
   };
-  const resetBtn = root.querySelector('#resetSchemaBtn');
+  const resetBtn = document.getElementById('resetSchemaBtn');
   if(resetBtn) resetBtn.onclick = async ()=>{
     if(!confirm('Réinitialiser ce guide aux questions par défaut ? Les modifications seront perdues pour tout le monde.')) return;
     try{
-      await setDoc(doc(db,'schemas',guideKey), DEFAULT_SCHEMAS[guideKey]);
+      await setDoc(doc(db,'schemas',currentGuide), DEFAULT_SCHEMAS[currentGuide]);
       showToast('Guide réinitialisé');
     }catch(e){ showToast('Erreur de réinitialisation'); }
   };
@@ -1134,24 +886,23 @@ function bindEditorEvents(rootId, guideKey){
 function selectGuide(guide){
   currentGuide = guide;
   editingId = null; editingCreatedAt = null;
-  adminUnlocked = false;
   document.getElementById('landing').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('guideTitle').textContent = schemas[guide].title;
   document.getElementById('guideSub').textContent = 'AgriCréditPlus — données partagées en temps réel entre enquêteurs';
   showTab('form');
-  renderForm(); renderTable();
+  renderForm(); renderTable(); renderEditor();
   updateSaveButtonLabel();
 }
 function showTab(tab){
   currentTab = tab;
-  ['form','table','metrics','admin'].forEach(t=>{
+  ['form','table','metrics','editor'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab ? 'block':'none';
   });
   document.querySelectorAll('.tab-btn').forEach(b=> b.classList.toggle('active', b.dataset.tab===tab));
   document.getElementById('formActionBar').style.display = tab==='form' ? 'flex' : 'none';
+  if(tab==='editor') renderEditor();
   if(tab==='metrics') renderMetrics();
-  if(tab==='admin') renderAdminTab();
 }
 
 document.querySelectorAll('.guide-card').forEach(card=>{
@@ -1175,6 +926,7 @@ document.getElementById('saveBtn').addEventListener('click', async ()=>{
       showToast('Fiche mise à jour');
     } else {
       await addDoc(collection(db,'entries_'+currentGuide), {createdAt:new Date().toISOString(), answers:collectAnswers()});
+      showToast('Fiche enregistrée');
       showToast('Fiche enregistrée');
     }
     editingId = null; editingCreatedAt = null;
