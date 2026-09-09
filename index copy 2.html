@@ -189,7 +189,6 @@ import {
   getFirestore, doc, getDoc, setDoc, addDoc, deleteDoc,
   collection, onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import * as XLSX from "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";
 
 const firebaseConfig = {
   apiKey: "AIzaSyC94ad88WJq6gMvYBiWFi8s8sZnaOlqqmE",
@@ -350,8 +349,6 @@ const DEFAULT_SCHEMAS = {
 
 let currentGuide = null;
 let currentTab = 'form';
-let editingId = null;
-let editingCreatedAt = null;
 let schemas = { agriculteurs: DEFAULT_SCHEMAS.agriculteurs, institutions: DEFAULT_SCHEMAS.institutions };
 let entriesByGuide = { agriculteurs: [], institutions: [] };
 
@@ -498,42 +495,6 @@ function clearForm(){
     }
   });
 }
-function fillForm(answers){
-  const schema = schemas[currentGuide];
-  flatQuestions(schema).forEach(qn=>{
-    const val = answers ? answers[qn.id] : undefined;
-    if(qn.type==='single'||qn.type==='multi'){
-      const group = document.getElementById('f_'+qn.id);
-      if(!group) return;
-      group.querySelectorAll('.chip').forEach(c=>c.classList.remove('selected'));
-      const otherInput = document.getElementById('f_'+qn.id+'__other');
-      if(otherInput){ otherInput.classList.remove('show'); otherInput.value=''; }
-      const vals = qn.type==='single' ? (val?[val]:[]) : (Array.isArray(val)?val:[]);
-      vals.forEach(v=>{
-        let matchVal = v, otherText = '';
-        if(typeof v==='string' && v.indexOf('Autre')===0){
-          matchVal='Autre';
-          const idx=v.indexOf(':');
-          if(idx>-1) otherText=v.slice(idx+1).trim();
-        }
-        const chip = Array.from(group.querySelectorAll('.chip')).find(c=>c.dataset.value===matchVal);
-        if(chip){
-          chip.classList.add('selected');
-          if(matchVal==='Autre' && otherInput){ otherInput.classList.add('show'); otherInput.value=otherText; }
-        }
-      });
-    } else {
-      const el = document.getElementById('f_'+qn.id);
-      if(el) el.value = val || '';
-    }
-  });
-}
-function updateSaveButtonLabel(){
-  const saveBtn = document.getElementById('saveBtn');
-  const resetBtn = document.getElementById('resetBtn');
-  if(saveBtn) saveBtn.textContent = editingId ? 'Mettre à jour la fiche' : 'Enregistrer la fiche';
-  if(resetBtn) resetBtn.textContent = editingId ? 'Annuler la modification' : 'Nouvelle fiche vierge';
-}
 
 /* ---------------- TABLE RENDERING ---------------- */
 function formatVal(v){
@@ -545,7 +506,7 @@ function renderTable(){
   const schema = schemas[currentGuide];
   const qs = flatQuestions(schema);
   const entries = entriesByGuide[currentGuide];
-  let html = `<div class="toolbar"><div>${entries.length} fiche(s)</div><div style="display:flex; gap:8px;"><button class="btn" id="exportCsvBtn" type="button">Exporter en CSV</button><button class="btn" id="exportXlsxBtn" type="button">Exporter en XLSX</button></div></div>`;
+  let html = `<div class="toolbar"><div>${entries.length} fiche(s)</div><button class="btn" id="exportCsvBtn" type="button">Exporter en CSV</button></div>`;
   if(entries.length===0){
     html += `<p class="empty-note">Aucune fiche enregistrée pour le moment.</p>`;
   } else {
@@ -559,27 +520,13 @@ function renderTable(){
         const disp = formatVal(v);
         html += `<td title="${esc(Array.isArray(v)?v.join(', '):(v||''))}">${esc(disp)}</td>`;
       });
-      html += `<td><button class="btn small edit-entry" data-id="${f.id}" type="button">Modifier</button> <button class="btn small danger del-entry" data-id="${f.id}" type="button">Supprimer</button></td></tr>`;
+      html += `<td><button class="btn small danger del-entry" data-id="${f.id}" type="button">Supprimer</button></td></tr>`;
     });
     html += `</tbody></table></div>`;
   }
   document.getElementById('tab-table').innerHTML = html;
   const exportBtn = document.getElementById('exportCsvBtn');
   if(exportBtn) exportBtn.addEventListener('click', exportCSV);
-  const exportXlsxBtnEl = document.getElementById('exportXlsxBtn');
-  if(exportXlsxBtnEl) exportXlsxBtnEl.addEventListener('click', exportXLSX);
-  document.querySelectorAll('.edit-entry').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      const f = entriesByGuide[currentGuide].find(x=>x.id===btn.dataset.id);
-      if(!f) return;
-      editingId = f.id;
-      editingCreatedAt = f.createdAt;
-      fillForm(f.answers||{});
-      updateSaveButtonLabel();
-      showTab('form');
-      showToast('Modification de la fiche en cours');
-    });
-  });
   document.querySelectorAll('.del-entry').forEach(btn=>{
     btn.addEventListener('click', async ()=>{
       if(confirm('Supprimer cette fiche ?')){
@@ -615,26 +562,6 @@ function exportCSV(){
   a.href=url; a.download = 'agricredit-'+currentGuide+'-'+new Date().toISOString().slice(0,10)+'.csv';
   document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
   showToast(entries.length+' fiche(s) exportée(s)');
-}
-function exportXLSX(){
-  const schema = schemas[currentGuide];
-  const qs = flatQuestions(schema);
-  const entries = entriesByGuide[currentGuide];
-  if(entries.length===0){ showToast('Aucune fiche à exporter'); return; }
-  const header = ['Horodatage'].concat(qs.map(q=>q.label));
-  const rows = entries.map(f=>{
-    const row = [f.createdAt||''];
-    qs.forEach(qn=>{
-      const v = f.answers ? f.answers[qn.id] : '';
-      row.push(Array.isArray(v)? v.join(' | ') : (v||''));
-    });
-    return row;
-  });
-  const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, currentGuide==='agriculteurs' ? 'Agriculteurs' : 'Institutions');
-  XLSX.writeFile(wb, 'agricredit-'+currentGuide+'-'+new Date().toISOString().slice(0,10)+'.xlsx');
-  showToast(entries.length+' fiche(s) exportée(s) en XLSX');
 }
 
 /* ---------------- EDITOR RENDERING ---------------- */
@@ -762,14 +689,12 @@ function bindEditorEvents(){
 /* ---------------- NAVIGATION ---------------- */
 function selectGuide(guide){
   currentGuide = guide;
-  editingId = null; editingCreatedAt = null;
   document.getElementById('landing').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('guideTitle').textContent = schemas[guide].title;
   document.getElementById('guideSub').textContent = 'AgriCréditPlus — données partagées en temps réel entre enquêteurs';
   showTab('form');
   renderForm(); renderTable(); renderEditor();
-  updateSaveButtonLabel();
 }
 function showTab(tab){
   currentTab = tab;
@@ -793,29 +718,12 @@ document.getElementById('backToLanding').addEventListener('click', ()=>{
 });
 document.getElementById('saveBtn').addEventListener('click', async ()=>{
   try{
-    if(editingId){
-      await setDoc(doc(db,'entries_'+currentGuide, editingId), {
-        createdAt: editingCreatedAt || new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        answers: collectAnswers()
-      });
-      showToast('Fiche mise à jour');
-    } else {
-      await addDoc(collection(db,'entries_'+currentGuide), {createdAt:new Date().toISOString(), answers:collectAnswers()});
-      showToast('Fiche enregistrée');
-    }
-    editingId = null; editingCreatedAt = null;
-    updateSaveButtonLabel();
+    await addDoc(collection(db,'entries_'+currentGuide), {createdAt:new Date().toISOString(), answers:collectAnswers()});
+    showToast('Fiche enregistrée');
     clearForm();
   }catch(e){ showToast('Erreur d\'enregistrement'); console.error(e); }
 });
-document.getElementById('resetBtn').addEventListener('click', ()=>{
-  const wasEditing = !!editingId;
-  clearForm();
-  editingId = null; editingCreatedAt = null;
-  updateSaveButtonLabel();
-  showToast(wasEditing ? 'Modification annulée' : 'Nouvelle fiche prête');
-});
+document.getElementById('resetBtn').addEventListener('click', ()=>{ clearForm(); showToast('Nouvelle fiche prête'); });
 
 </script>
 </body>
